@@ -109,6 +109,25 @@ def delete_record_by_id(record_id: int) -> bool:
     return True
 
 
+def delete_record(record: dict, fallback_index: int | None = None) -> bool:
+    records = load_data()
+    rec_id = record.get("id")
+
+    if rec_id is not None:
+        updated = [r for r in records if r.get("id") != rec_id]
+        if len(updated) != len(records):
+            save_data(updated)
+            return True
+
+    if fallback_index is not None and 0 <= fallback_index < len(records):
+        if records[fallback_index] == record:
+            records.pop(fallback_index)
+            save_data(records)
+            return True
+
+    return False
+
+
 def build_stats_text(records: list[dict]) -> str:
     if not records:
         return "Статистика недоступна: архів порожній."

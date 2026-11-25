@@ -6,7 +6,7 @@ from deck import SPHERES
 from storage import (
     build_stats_text,
     create_spread_record,
-    delete_record_by_id,
+    delete_record,
     draw_daily_record,
     format_listbox_items,
     format_record_details,
@@ -70,14 +70,14 @@ def run_gui() -> None:
         if status_msg:
             window["-STATUS-"].update(status_msg)
 
-    def get_selected_record(values: dict) -> dict | None:
-        selected_indices = values.get("-LIST-", [])
-        if not selected_indices:
-            return None
-        idx = selected_indices[0]
+    def get_selected_index_and_record() -> tuple[int | None, dict | None]:
+        indexes = window["-LIST-"].get_indexes()
+        if not indexes:
+            return None, None
+        idx = indexes[0]
         if 0 <= idx < len(displayed_records):
-            return displayed_records[idx]
-        return None
+            return idx, displayed_records[idx]
+        return None, None
 
     while True:
         event, values = window.read()
@@ -124,7 +124,7 @@ def run_gui() -> None:
             refresh_list(all_recs, f"Показано всі записи ({len(all_recs)}).")
 
         elif event in ("-DETAILS-", "-LIST-"):
-            rec = get_selected_record(values)
+            _, rec = get_selected_index_and_record()
             if rec is None:
                 if event == "-DETAILS-":
                     sg.popup_warning("Спочатку оберіть запис у списку!", title="Запис не вибрано")
@@ -134,27 +134,29 @@ def run_gui() -> None:
             if event == "-DETAILS-":
                 sg.popup(
                     format_record_details(rec),
-                    title=f"Запис #{rec['id']}",
+                    title=f"Запис #{rec.get('id', '')}",
                 )
             else:
                 window["-STATUS-"].update(
-                    f"Вибрано #{rec['id']} [{rec.get('sphere', 'Загальне')}]: {rec['card']} — {rec['question']}"
+                    f"Вибрано #{rec.get('id', '')} [{rec.get('sphere', 'Загальне')}]: {rec['card']} — {rec['question']}"
                 )
 
         elif event == "-DELETE-":
-            rec = get_selected_record(values)
-            if rec is None:
-                sg.popup_warning("Оберіть запис, який потрібно видалити!", title="Запис не вибрано")
+            idx, rec = get_selected_index_and_record()
+            if rec is None or idx is None:
+                sg.popup_warning("Оберіть запис у списку, який потрібно видалити!", title="Запис не вибрано")
                 window["-STATUS-"].update("Помилка: не вибрано запис для видалення.")
                 continue
 
+            card_title = rec.get("card", "Запис")
+            rec_label = f"#{rec['id']} ({card_title})" if "id" in rec else card_title
             confirm = sg.popup_yes_no(
-                f"Видалити запис #{rec['id']} ({rec['card']})?",
+                f"Видалити запис {rec_label}?",
                 title="Підтвердження видалення",
             )
             if confirm == "Yes":
-                if delete_record_by_id(rec["id"]):
-                    refresh_list(load_data(), f"Запис #{rec['id']} видалено.")
+                if delete_record(rec, fallback_index=idx):
+                    refresh_list(load_data(), f"Запис {rec_label} видалено.")
                 else:
                     sg.popup_error("Не вдалося видалити запис.", title="Помилка")
 
@@ -179,7 +181,6 @@ def parse_args() -> argparse.Namespace:
     p_daily = subparsers.add_parser("daily", help="Витягнути карту дня")
     p_daily.add_argument("--sphere", default="Загальне", choices=SPHERES, help="Сфера життя")
 
-    subparsers.add_argument("--list_placeholder", action="store_true") if False else None
     subparsers.add_parser("list", help="Показати всі записи")
 
     p_search = subparsers.add_parser("search", help="Пошук за запитом, сферою або картою")
